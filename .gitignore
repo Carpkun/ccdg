@@ -4,3 +4,21 @@
 # React Router
 /.react-router/
 /build/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Google Cloud credentials
+google-cloud-key.json
+*.json
+!package*.json
+!tsconfig.json
+!react-router.config.ts
+
+# TTS cache files
+/public/tts/*.mp3
+
+# Debug files
+contents_rows.csv
