@@ -5,6 +5,7 @@ import type { Content } from "../lib/types";
 import { CATEGORIES } from "../lib/types";
 import { getVideoThumbnailUrl } from "../utils/imageOptimization";
 import { useSearchDebounce } from "../hooks/useDebounce";
+import OptimizedImage from "../components/OptimizedImage";
 
 import type { Route } from "./+types/category.$slug";
 
@@ -43,10 +44,24 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const supabase = createSupabaseServerClient(request);
 
   try {
-    // 기본 쿼리 구성
+    // 기본 쿼리 구성 - 필요한 필드만 선택하여 성능 개선
     let query = supabase
       .from('contents')
-      .select('*', { count: 'exact' })
+      .select(`
+        id,
+        title,
+        content,
+        author_name,
+        created_at,
+        view_count,
+        likes_count,
+        thumbnail_url,
+        image_url,
+        video_url,
+        video_platform,
+        video_thumbnail_url,
+        tts_url
+      `, { count: 'exact' })
       .eq('category', slug)
       .eq('is_published', true);
 
@@ -93,8 +108,8 @@ export default function CategoryPage() {
   const { category, contents, pagination, search } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // 실시간 검색을 위한 디바운스 훅 사용 (150ms로 빠르게 설정)
-  const { searchTerm, debouncedSearchTerm, isSearching, updateSearchTerm, clearSearch } = useSearchDebounce(search, 150);
+  // 실시간 검색을 위한 디바운스 훅 사용 (300ms로 최적화)
+  const { searchTerm, debouncedSearchTerm, isSearching, updateSearchTerm, clearSearch } = useSearchDebounce(search, 300);
 
   // 디바운스된 검색어가 변경되면 URL 업데이트
   useEffect(() => {
@@ -247,38 +262,25 @@ export default function CategoryPage() {
                     (e.currentTarget as HTMLElement).style.borderWidth = '1px';
                   }}
                 >
-                  {/* 이미지 영역 */}
-                  {imageUrl ? (
-                    <div className="relative h-48 overflow-hidden">
-                      <img
-                        src={imageUrl}
-                        alt={content.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                      {/* 카테고리 배지 */}
-                      <div className="absolute top-3 left-3">
-                        <div className="px-2 py-1 rounded-full text-xs font-medium bg-black bg-opacity-70 text-white backdrop-blur-sm">
-                          <span className="mr-1">{category.icon}</span>
-                          {category.name}
-                        </div>
+                  {/* 이미지 영역 - 최적화된 이미지 컴포넌트 사용 */}
+                  <div className="relative h-48 overflow-hidden">
+                    <OptimizedImage
+                      src={imageUrl}
+                      alt={content.title}
+                      category={content.category}
+                      className="w-full h-full group-hover:scale-105 transition-transform duration-300"
+                      width={400}
+                      height={300}
+                      loading="lazy"
+                    />
+                    {/* 카테고리 배지 */}
+                    <div className="absolute top-3 left-3 z-10">
+                      <div className="px-2 py-1 rounded-full text-xs font-medium bg-black bg-opacity-70 text-white backdrop-blur-sm">
+                        <span className="mr-1">{category.icon}</span>
+                        {category.name}
                       </div>
                     </div>
-                  ) : (
-                    <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-gray-200 group-hover:to-gray-300 transition-colors">
-                      <div className="text-center">
-                        <span className="text-4xl text-gray-400 mb-2 block">{category.icon}</span>
-                        <span className="text-sm text-gray-500">{category.name}</span>
-                      </div>
-                      {/* 카테고리 배지 */}
-                      <div className="absolute top-3 left-3">
-                        <div className="px-2 py-1 rounded-full text-xs font-medium bg-black bg-opacity-70 text-white backdrop-blur-sm">
-                          <span className="mr-1">{category.icon}</span>
-                          {category.name}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                   
                   {/* 콘텐츠 정보 */}
                   <div className="p-6">

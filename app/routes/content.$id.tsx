@@ -8,6 +8,8 @@ import { getVideoThumbnailUrl } from "../utils/imageOptimization";
 import PhotoContent from "../components/PhotoContent";
 import CalligraphyContent from "../components/CalligraphyContent";
 import VideoContent from "../components/VideoContent";
+import LazyTTSPlayer from "../components/LazyTTSPlayer";
+import LazyContentRenderer from "../components/LazyContentRenderer";
 
 // TTSPlayer를 동적 임포트로 로드 (순환 의존성 방지)
 const TTSPlayer = lazy(() => import("../components/TTSPlayer"));
@@ -398,19 +400,11 @@ export default function ContentDetail() {
               {/* TTS 기능 (수필 카테고리에만 표시) */}
               {content.category === 'essay' && (
                 <div className="flex-1 max-w-md">
-                  <Suspense fallback={
-                    <div className="flex items-center space-x-2 w-full">
-                      <div className="w-8 h-8 bg-gray-200 animate-pulse rounded-full"></div>
-                      <div className="flex-1 h-1 bg-gray-200 animate-pulse rounded"></div>
-                      <div className="w-12 h-4 bg-gray-200 animate-pulse rounded"></div>
-                    </div>
-                  }>
-                    <TTSPlayer 
-                      text={content.content}
-                      contentId={content.id}
-                      className="w-full"
-                    />
-                  </Suspense>
+                  <LazyTTSPlayer 
+                    text={content.content}
+                    contentId={content.id}
+                    className="w-full"
+                  />
                 </div>
               )}
               
@@ -458,7 +452,16 @@ export default function ContentDetail() {
             ) : content.category === 'calligraphy' && (content.image_url || content.thumbnail_url) ? (
               <CalligraphyContent content={content} />
             ) : (
-              <div dangerouslySetInnerHTML={{ __html: content.content }} />
+              // 콘텐츠 길이에 따른 최적화 렌더링
+              content.content.length > 2000 ? (
+                <LazyContentRenderer 
+                  content={content.content}
+                  chunkSize={1500}
+                  className="prose max-w-none"
+                />
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: content.content }} />
+              )
             )}
           </div>
           

@@ -29,8 +29,25 @@ export default defineConfig(({ mode }) => ({
     minify: 'esbuild', // 더 빠른 번들링
     target: 'es2020', // 최신 브라우저 지원
     
+    // 번들 최적화
+    chunkSizeWarningLimit: 1000,
+    
     // 외부 라이브러리 경고 억제
     rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // 대형 라이브러리를 별도 청크로 분리
+          if (id.includes('@tiptap/')) {
+            return 'tiptap';
+          }
+          if (id.includes('react') || id.includes('react-dom')) {
+            return 'vendor';
+          }
+          if (id.includes('dompurify') || id.includes('validator')) {
+            return 'utils';
+          }
+        }
+      },
       external: (id) => {
         // Node.js 내장 모듈들을 서버에서만 사용
         if (['fs', 'path', 'crypto'].includes(id)) {
