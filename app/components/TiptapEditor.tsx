@@ -5,6 +5,7 @@ import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import HardBreak from '@tiptap/extension-hard-break';
 import { useCallback, useEffect, useState } from 'react';
+import ClientOnly from './ClientOnly';
 
 interface TiptapEditorProps {
   content: string;
@@ -13,13 +14,20 @@ interface TiptapEditorProps {
   className?: string;
 }
 
-export default function TiptapEditor({ 
+// 내부 컴포넌트: 실제 Tiptap 에디터
+function TiptapEditorInternal({ 
   content, 
   onChange, 
   placeholder = "여기에 내용을 작성하세요...",
   className = ""
 }: TiptapEditorProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // 클라이언트에서만 마운트 상태 설정
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -57,6 +65,7 @@ export default function TiptapEditor({
     ],
     content,
     immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       onChange(html);
@@ -143,16 +152,27 @@ export default function TiptapEditor({
     }
   }, [editor]);
 
+  // 콘텐츠 업데이트 및 에디터 초기화
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+    if (editor && isMounted) {
+      if (content && content !== editor.getHTML()) {
+        editor.commands.setContent(content);
+      }
+      // 에디터를 포커스 가능한 상태로 만들기
+      setTimeout(() => {
+        editor.commands.focus();
+      }, 100);
     }
-  }, [editor, content]);
+  }, [editor, content, isMounted]);
 
-  if (!editor) {
+  // 마운트되지 않았거나 에디터가 없으면 로딩 상태 표시
+  if (!isMounted || !editor) {
     return (
       <div className="w-full h-64 bg-gray-100 rounded-md flex items-center justify-center">
-        <div className="text-gray-500">에디터 로딩 중...</div>
+        <div className="text-gray-500 flex items-center">
+          <div className="animate-spin mr-2 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+          에디터 로딩 중...
+        </div>
       </div>
     );
   }
@@ -337,6 +357,17 @@ export default function TiptapEditor({
         .prose-editor .ProseMirror {
           white-space: pre-wrap;
           word-wrap: break-word;
+          outline: none;
+          border: none;
+          min-height: 200px;
+          padding: 8px;
+          cursor: text;
+        }
+        
+        .prose-editor .ProseMirror:focus {
+          outline: none;
+          border: none;
+          box-shadow: none;
         }
         
         .prose-editor .ProseMirror br.hard-break {
@@ -358,10 +389,42 @@ export default function TiptapEditor({
           min-height: 1.2em;
         }
         
+        .prose-editor .ProseMirror p:empty:before {
+          content: "";
+          float: left;
+          height: 0;
+          pointer-events: none;
+        }
+        
         .prose-editor .ProseMirror p + p {
           margin-top: 0.5rem;
         }
+        
+        /* 커서 스타일 */
+        .prose-editor .ProseMirror .ProseMirror-cursor {
+          border-left: 1px solid #000;
+          border-right: none;
+          margin-left: -1px;
+          pointer-events: none;
+        }
       `}} />
     </div>
+  );
+}
+
+// 메인 컴포넌트: ClientOnly로 래핑
+export default function TiptapEditor(props: TiptapEditorProps) {
+  return (
+    <ClientOnly 
+      fallback={
+        <div className="w-full h-64 bg-gray-100 rounded-md flex items-center justify-center">
+          <div className="text-gray-500 flex items-center">
+            <div className="animate-spin mr-2 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+            에디터 초기화 중...
+          </div>
+        </div>
+      }
+      children={() => <TiptapEditorInternal {...props} />}
+    />
   );
 }
