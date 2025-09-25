@@ -151,15 +151,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     if (content.tts_status === 'completed' && content.tts_url) {
-      // 파일이 실제로 존재하는지 확인
-      const filePath = path.join(process.cwd(), 'public', content.tts_url);
-      if (fs.existsSync(filePath)) {
-        return Response.json({
-          status: 'cached',
-          url: content.tts_url,
-          duration: content.tts_duration
-        });
-      }
+      return Response.json({
+        status: 'cached',
+        url: content.tts_url,
+        duration: content.tts_duration
+      });
     }
 
     return Response.json({
@@ -215,21 +211,18 @@ export async function action({ request }: ActionFunctionArgs) {
     // 모든 오디오를 하나로 합치기
     const combinedAudio = combineAudioBuffers(audioBuffers);
     
-    // 파일 저장
-    const fileName = generateFileName(contentId, cleanText);
-    const relativePath = `tts/${fileName}`;
-    const filePath = path.join(process.cwd(), 'public', relativePath);
-    
-    fs.writeFileSync(filePath, combinedAudio);
+    // Base64로 인코딩 (서버리스 환경에서 파일 시스템 대신 데이터베이스에 저장)
+    const base64Audio = combinedAudio.toString('base64');
+    const audioDataUrl = `data:audio/mp3;base64,${base64Audio}`;
     
     // 대략적인 재생 시간 계산 (글자 수 기준)
     const estimatedDuration = Math.ceil(cleanText.length / 10);
     
-    // 데이터베이스에 TTS 정보 저장
+    // 데이터베이스에 TTS 정보 저장 (데이터 URL 방식으로 저장)
     const { error: updateError } = await supabase
       .from('contents')
       .update({
-        tts_url: `/${relativePath}`,
+        tts_url: audioDataUrl,
         tts_duration: estimatedDuration,
         tts_generated_at: new Date().toISOString(),
         tts_file_size: combinedAudio.length,
@@ -248,7 +241,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return Response.json({
       success: true,
-      url: `/${relativePath}`,
+      url: audioDataUrl,
       duration: estimatedDuration,
       chunks: textChunks.length,
       fileSize: combinedAudio.length

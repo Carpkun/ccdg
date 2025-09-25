@@ -2,9 +2,10 @@ import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { vercelPreset } from "@vercel/react-router/vite";
 
 export default defineConfig({
-  plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
+  plugins: [tailwindcss(), reactRouter({ presets: [vercelPreset()] }), tsconfigPaths()],
   ssr: {
     noExternal: [],
     external: ['@google-cloud/text-to-speech', 'fs', 'path', 'crypto'],
