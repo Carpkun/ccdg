@@ -4,7 +4,6 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import HardBreak from '@tiptap/extension-hard-break';
-import Paragraph from '@tiptap/extension-paragraph';
 import { useCallback, useEffect, useState } from 'react';
 
 interface TiptapEditorProps {

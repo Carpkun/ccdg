@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { cleanTextForTTS } from '../utils/htmlUtils'
 
 interface TTSPlayerProps {
@@ -21,23 +21,21 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
   
   const audioRef = useRef<HTMLAudioElement>(null)
   
-  // 예상 재생 시간 계산 (글자 수 기준)
-  const calculateEstimatedDuration = (text: string): number => {
+  // 예상 재생 시간 계산 (메모이제이션)
+  const estimatedDuration = useMemo(() => {
     const cleanText = cleanTextForTTS(text)
     return Math.ceil(cleanText.length / 10) // 10글자당 1초 예상
-  }
+  }, [text])
   
   // 컴포넌트 마운트 시 초기 데이터 로드
   useEffect(() => {
-    // 예상 재생 시간 계산
-    const estimated = calculateEstimatedDuration(text)
-    setEstimatedDuration(estimated)
+    setEstimatedDuration(estimatedDuration)
     
     // TTS 캐시 상태 확인
     checkCachedTTS().then(cacheResult => {
       if (cacheResult.status === 'cached' && cacheResult.url) {
         setAudioUrl(cacheResult.url)
-        setDuration(cacheResult.duration || estimated)
+        setDuration(cacheResult.duration || estimatedDuration)
         setTtsStatus('cached')
         
         // 오디오 요소에 소스 설정
@@ -47,22 +45,22 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
         }
       } else {
         // 캐시가 없더라도 예상 시간으로 재생바 표시
-        setDuration(estimated)
+        setDuration(estimatedDuration)
         setTtsStatus('pending')
       }
     }).catch(() => {
-      setDuration(estimated)
+      setDuration(estimatedDuration)
       setTtsStatus('pending')
     })
-  }, [text, contentId])
+  }, [text, contentId, estimatedDuration, checkCachedTTS])
   
-  // URL이 레거시 파일 경로 형식인지 확인
-  const isLegacyFileUrl = (url: string): boolean => {
+  // URL이 레거시 파일 경로 형식인지 확인 (메모이제이션)
+  const isLegacyFileUrl = useCallback((url: string): boolean => {
     return url.startsWith('/tts/') && url.endsWith('.mp3')
-  }
+  }, [])
   
-  // 캐시된 TTS 파일 조회
-  const checkCachedTTS = async () => {
+  // 캐시된 TTS 파일 조회 (메모이제이션)
+  const checkCachedTTS = useCallback(async () => {
     try {
       const response = await fetch(`/api/tts/cached?contentId=${contentId}`, {
         method: 'GET',
@@ -84,7 +82,7 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
     } catch (error) {
       return { status: 'pending' }
     }
-  }
+  }, [contentId, isLegacyFileUrl])
   
   // TTS 파일 생성 요청
   const generateTTS = async (shouldAutoPlay = false) => {
