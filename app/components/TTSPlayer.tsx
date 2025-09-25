@@ -1,5 +1,3 @@
-'use client'
-
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { cleanTextForTTS } from '../utils/htmlUtils'
 
@@ -26,6 +24,31 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
     const cleanText = cleanTextForTTS(text)
     return Math.ceil(cleanText.length / 10) // 10글자당 1초 예상
   }, [text])
+  
+  // 캐시된 TTS 파일 조회 (메모이제이션)
+  const checkCachedTTS = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/tts/cached?contentId=${contentId}`, {
+        method: 'GET',
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'TTS 캐시 조회에 실패했습니다.')
+      }
+      
+      // 레거시 파일 경로라면 새로 생성 필요
+      if (data.status === 'cached' && data.url && isLegacyFileUrl(data.url)) {
+        console.log('Legacy TTS file detected, regenerating...', data.url)
+        return { status: 'pending' } // 새로 생성하도록 처리
+      }
+      
+      return data
+    } catch (error) {
+      return { status: 'pending' }
+    }
+  }, [contentId, isLegacyFileUrl])
   
   // 컴포넌트 마운트 시 초기 데이터 로드
   useEffect(() => {
@@ -59,30 +82,6 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
     return url.startsWith('/tts/') && url.endsWith('.mp3')
   }, [])
   
-  // 캐시된 TTS 파일 조회 (메모이제이션)
-  const checkCachedTTS = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/tts/cached?contentId=${contentId}`, {
-        method: 'GET',
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'TTS 캐시 조회에 실패했습니다.')
-      }
-      
-      // 레거시 파일 경로라면 새로 생성 필요
-      if (data.status === 'cached' && data.url && isLegacyFileUrl(data.url)) {
-        console.log('Legacy TTS file detected, regenerating...', data.url)
-        return { status: 'pending' } // 새로 생성하도록 처리
-      }
-      
-      return data
-    } catch (error) {
-      return { status: 'pending' }
-    }
-  }, [contentId, isLegacyFileUrl])
   
   // TTS 파일 생성 요청
   const generateTTS = async (shouldAutoPlay = false) => {
