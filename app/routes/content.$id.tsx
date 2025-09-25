@@ -1,5 +1,5 @@
 import { useLoaderData, useActionData, Form, useFetcher } from "react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { createSupabaseServerClient } from "../lib/supabase";
 import type { Content, Comment } from "../lib/types";
 import { CATEGORIES } from "../lib/types";
@@ -8,7 +8,9 @@ import { getVideoThumbnailUrl } from "../utils/imageOptimization";
 import PhotoContent from "../components/PhotoContent";
 import CalligraphyContent from "../components/CalligraphyContent";
 import VideoContent from "../components/VideoContent";
-import TTSPlayer from "../components/TTSPlayer";
+
+// TTSPlayer를 동적 임포트로 로드 (순환 의존성 방지)
+const TTSPlayer = lazy(() => import("../components/TTSPlayer"));
 
 import type { Route } from "./+types/content.$id";
 
@@ -396,11 +398,19 @@ export default function ContentDetail() {
               {/* TTS 기능 (수필 카테고리에만 표시) */}
               {content.category === 'essay' && (
                 <div className="flex-1 max-w-md">
-                  <TTSPlayer 
-                    text={content.content}
-                    contentId={content.id}
-                    className="w-full"
-                  />
+                  <Suspense fallback={
+                    <div className="flex items-center space-x-2 w-full">
+                      <div className="w-8 h-8 bg-gray-200 animate-pulse rounded-full"></div>
+                      <div className="flex-1 h-1 bg-gray-200 animate-pulse rounded"></div>
+                      <div className="w-12 h-4 bg-gray-200 animate-pulse rounded"></div>
+                    </div>
+                  }>
+                    <TTSPlayer 
+                      text={content.content}
+                      contentId={content.id}
+                      className="w-full"
+                    />
+                  </Suspense>
                 </div>
               )}
               

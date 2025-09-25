@@ -35,6 +35,17 @@ export default defineConfig({
         if (id.includes('@grpc/grpc-js')) return true;
         return false;
       },
+      onwarn(warning, warn) {
+        // 순환 의존성 경고 표시
+        if (warning.code === 'CIRCULAR_DEPENDENCY') {
+          console.warn('Circular dependency detected:', warning.message);
+        }
+        // 다른 경고도 표시
+        warn(warning);
+      },
     },
+    sourcemap: true, // 소스맵 생성으로 디버깅 개선
+    minify: 'esbuild', // 더 빠른 번들링
+    target: 'es2020', // 최신 브라우저 지원
   },
 });
