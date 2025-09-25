@@ -1,4 +1,5 @@
 import { createCookieSessionStorage } from "react-router";
+import bcrypt from "bcryptjs";
 
 // 세션 스토리지 설정
 export const sessionStorage = createCookieSessionStorage({
@@ -80,16 +81,32 @@ export async function verifyLogin(email: string, password: string) {
     return null;
   }
   
-  // 원래 프로젝트의 관리자 계정 정보 확인
-  if (email === "cccc@cccc.or.kr" && password === "ansghk2025@$") {
-    return {
+  // 관리자 계정별 해시된 비밀번호 (실제 환경에서는 데이터베이스에서 조회)
+  const adminCredentials = {
+    "cccc@cccc.or.kr": {
       id: "admin-1",
-      email: email,
-      name: "춘천문화원 관리자"
-    };
+      name: "춘천문화원 관리자",
+      // 비밀번호: ansghk2025@$ 의 bcrypt 해시
+      passwordHash: "$2b$12$IWKbJJWS9jqWpOk2cqgJ9Oqi0lNfhXEXWMQkdBhci4CGw4hRT/1Z6"
+    }
+  };
+  
+  const admin = adminCredentials[email as keyof typeof adminCredentials];
+  if (!admin) {
+    return null;
   }
   
-  return null;
+  // bcrypt로 비밀번호 검증
+  const isPasswordValid = await bcrypt.compare(password, admin.passwordHash);
+  if (!isPasswordValid) {
+    return null;
+  }
+  
+  return {
+    id: admin.id,
+    email: email,
+    name: admin.name
+  };
 }
 
 export async function getUser(request: Request) {
