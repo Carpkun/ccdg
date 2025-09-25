@@ -253,9 +253,6 @@ export async function action({ request }: ActionFunctionArgs) {
     // 대략적인 재생 시간 계산 (글자 수 기준)
     const estimatedDuration = Math.ceil(cleanText.length / 10);
     
-    // 텍스트 해시 생성 (캐싱용)
-    const textHash = await generateTextHash(cleanText);
-    
     // 데이터베이스에 TTS 정보 저장 (데이터 URL 방식으로 저장)
     const { error: updateError } = await supabase
       .from('contents')
@@ -265,14 +262,18 @@ export async function action({ request }: ActionFunctionArgs) {
         tts_generated_at: new Date().toISOString(),
         tts_file_size: combinedAudio.length,
         tts_chunks_count: textChunks.length,
-        tts_text_hash: textHash,
         tts_status: 'completed'
       })
       .eq('id', contentId);
 
     if (updateError) {
+      console.error('데이터베이스 업데이트 오류:', updateError);
       return Response.json(
-        { error: '데이터베이스 업데이트에 실패했습니다.' },
+        { 
+          error: '데이터베이스 업데이트에 실패했습니다.',
+          details: updateError.message,
+          code: updateError.code
+        },
         { status: 500 }
       );
     }
@@ -287,24 +288,32 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
   } catch (error) {
-    console.error('TTS 생성 오류:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('TTS 생성 오류:', {
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      contentId: contentId || 'unknown',
+      textLength: text?.length || 0
+    });
     
     // 실패 상태로 업데이트
     try {
-      const { contentId } = await request.json();
+      const supabase = createSupabaseServerClient(request);
       if (contentId) {
-        const supabase = createSupabaseServerClient(request);
         await supabase
           .from('contents')
           .update({ tts_status: 'failed' })
           .eq('id', contentId);
       }
-    } catch (parseError) {
-      // 실패 상태 업데이트 중 오류 발생
+    } catch (updateFailedError) {
+      console.error('실패 상태 업데이트 오류:', updateFailedError);
     }
 
     return Response.json(
-      { error: 'TTS 생성 중 오류가 발생했습니다.' },
+      { 
+        error: 'TTS 생성 중 오류가 발생했습니다.',
+        details: errorMessage
+      },
       { status: 500 }
     );
   }
