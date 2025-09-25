@@ -25,6 +25,11 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
     return Math.ceil(cleanText.length / 10) // 10글자당 1초 예상
   }, [text])
   
+  // URL이 레거시 파일 경로 형식인지 확인 (메모이제이션)
+  const isLegacyFileUrl = useCallback((url: string): boolean => {
+    return url.startsWith('/tts/') && url.endsWith('.mp3')
+  }, [])
+  
   // 캐시된 TTS 파일 조회 (메모이제이션)
   const checkCachedTTS = useCallback(async () => {
     try {
@@ -76,12 +81,6 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
       setTtsStatus('pending')
     })
   }, [text, contentId, estimatedDuration, checkCachedTTS])
-  
-  // URL이 레거시 파일 경로 형식인지 확인 (메모이제이션)
-  const isLegacyFileUrl = useCallback((url: string): boolean => {
-    return url.startsWith('/tts/') && url.endsWith('.mp3')
-  }, [])
-  
   
   // TTS 파일 생성 요청
   const generateTTS = async (shouldAutoPlay = false) => {
