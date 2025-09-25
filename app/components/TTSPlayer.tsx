@@ -17,7 +17,7 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ttsStatus, setTtsStatus] = useState<'pending' | 'cached' | 'generating' | 'completed' | 'failed'>('pending')
-  const [estimatedDuration, setEstimatedDuration] = useState(0) // 예상 재생 시간
+  const [estimatedTime, setEstimatedTime] = useState(0) // 예상 재생 시간 상태
   
   const audioRef = useRef<HTMLAudioElement>(null)
   
@@ -29,7 +29,7 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
   
   // 컴포넌트 마운트 시 초기 데이터 로드
   useEffect(() => {
-    setEstimatedDuration(estimatedDuration)
+    setEstimatedTime(estimatedDuration)
     
     // TTS 캐시 상태 확인
     checkCachedTTS().then(cacheResult => {
