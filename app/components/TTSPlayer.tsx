@@ -56,6 +56,11 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
     })
   }, [text, contentId])
   
+  // URL이 레거시 파일 경로 형식인지 확인
+  const isLegacyFileUrl = (url: string): boolean => {
+    return url.startsWith('/tts/') && url.endsWith('.mp3')
+  }
+  
   // 캐시된 TTS 파일 조회
   const checkCachedTTS = async () => {
     try {
@@ -67,6 +72,12 @@ export default function TTSPlayer({ text, contentId, className = '' }: TTSPlayer
       
       if (!response.ok) {
         throw new Error(data.error || 'TTS 캐시 조회에 실패했습니다.')
+      }
+      
+      // 레거시 파일 경로라면 새로 생성 필요
+      if (data.status === 'cached' && data.url && isLegacyFileUrl(data.url)) {
+        console.log('Legacy TTS file detected, regenerating...', data.url)
+        return { status: 'pending' } // 새로 생성하도록 처리
       }
       
       return data

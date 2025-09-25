@@ -183,6 +183,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     if (content.tts_status === 'completed' && content.tts_url) {
+      // 레거시 파일 경로 감지 (파일 시스템 기반 TTS)
+      if (content.tts_url.startsWith('/tts/') && content.tts_url.endsWith('.mp3')) {
+        console.log(`Legacy TTS URL detected for content ${contentId}: ${content.tts_url}`);
+        // 레거시 파일은 pending 상태로 처리하여 새로 생성
+        await supabase
+          .from('contents')
+          .update({ tts_status: 'pending', tts_url: null })
+          .eq('id', contentId);
+          
+        return Response.json({
+          status: 'pending',
+          message: 'Legacy TTS detected, will regenerate'
+        });
+      }
+      
       return Response.json({
         status: 'cached',
         url: content.tts_url,
