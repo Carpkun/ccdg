@@ -2,24 +2,48 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { TextToSpeechClient } from '@google-cloud/text-to-speech';
 import { createSupabaseServerClient } from "../lib/supabase";
 import { cleanTextForTTS } from "../utils/htmlUtils";
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
 
 // Google Cloud TTS 클라이언트 초기화
-let ttsClient: TextToSpeechClient;
+let ttsClient: TextToSpeechClient | null = null;
+let initError: string | null = null;
+
 try {
+  // 환경 변수 확인
+  const hasCredentialsJson = !!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  const hasCredentialsFile = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const hasProjectId = !!process.env.GOOGLE_CLOUD_PROJECT_ID;
+  
+  console.log('TTS 초기화 환경 변수 상태:', {
+    hasCredentialsJson,
+    hasCredentialsFile,
+    hasProjectId,
+    projectId: process.env.GOOGLE_CLOUD_PROJECT_ID
+  });
+  
+  if (!hasProjectId) {
+    throw new Error('GOOGLE_CLOUD_PROJECT_ID 환경 변수가 설정되지 않음');
+  }
+  
+  if (!hasCredentialsJson && !hasCredentialsFile) {
+    throw new Error('Google Cloud 인증 정보가 설정되지 않음 (GOOGLE_APPLICATION_CREDENTIALS_JSON 또는 GOOGLE_APPLICATION_CREDENTIALS 필요)');
+  }
+  
   // 서버리스 환경에서는 JSON 환경변수 사용, 로컬에서는 파일 사용
-  const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON 
-    ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
+  const credentials = hasCredentialsJson
+    ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON!)
     : undefined;
     
   ttsClient = new TextToSpeechClient({
     ...(credentials ? { credentials } : { keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS }),
     projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
   });
+  
+  console.log('Google Cloud TTS 클라이언트 초기화 성공');
+  
 } catch (error) {
-  console.error('Google Cloud TTS 초기화 실패:', error);
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  initError = `Google Cloud TTS 초기화 실패: ${errorMessage}`;
+  console.error(initError, error);
 }
 
 // UTF-8 바이트 길이 계산
@@ -86,6 +110,10 @@ const splitTextIntoChunks = (text: string, maxBytes: number = 4500): string[] =>
 
 // 단일 청크 TTS 생성
 const generateChunkAudio = async (chunkText: string): Promise<Buffer> => {
+  if (!ttsClient) {
+    throw new Error('TTS 클라이언트가 초기화되지 않음');
+  }
+  
   const request = {
     input: { text: chunkText },
     voice: {
@@ -115,10 +143,14 @@ const combineAudioBuffers = (buffers: Buffer[]): Buffer => {
   return Buffer.concat(buffers);
 };
 
-// 파일명 생성 (콘텐츠 ID + 텍스트 해시)
-const generateFileName = (contentId: string, text: string): string => {
-  const textHash = crypto.createHash('md5').update(text).digest('hex').substring(0, 8);
-  return `${contentId}_${textHash}.mp3`;
+// 텍스트 해시 생성 (Web Crypto API 사용)
+const generateTextHash = async (text: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex.substring(0, 8);
 };
 
 // GET: 캐시된 TTS 파일 조회
@@ -174,11 +206,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // POST: TTS 파일 생성 및 캐싱
 export async function action({ request }: ActionFunctionArgs) {
   try {
-    // 환경 변수 확인
-    const hasCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-    if (!hasCredentials || !process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    // TTS 클라이언트 초기화 상태 확인
+    if (initError || !ttsClient) {
+      console.error('TTS 생성 시도 시 초기화 오류:', initError);
       return Response.json(
-        { error: 'Google Cloud 설정이 누락되었습니다.' },
+        { 
+          error: initError || 'Google Cloud TTS 클라이언트가 초기화되지 않음',
+          details: '환경 변수 설정을 확인하세요: GOOGLE_CLOUD_PROJECT_ID, GOOGLE_APPLICATION_CREDENTIALS_JSON'
+        },
         { status: 500 }
       );
     }
@@ -218,6 +253,9 @@ export async function action({ request }: ActionFunctionArgs) {
     // 대략적인 재생 시간 계산 (글자 수 기준)
     const estimatedDuration = Math.ceil(cleanText.length / 10);
     
+    // 텍스트 해시 생성 (캐싱용)
+    const textHash = await generateTextHash(cleanText);
+    
     // 데이터베이스에 TTS 정보 저장 (데이터 URL 방식으로 저장)
     const { error: updateError } = await supabase
       .from('contents')
@@ -227,6 +265,7 @@ export async function action({ request }: ActionFunctionArgs) {
         tts_generated_at: new Date().toISOString(),
         tts_file_size: combinedAudio.length,
         tts_chunks_count: textChunks.length,
+        tts_text_hash: textHash,
         tts_status: 'completed'
       })
       .eq('id', contentId);
